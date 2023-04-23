@@ -8,7 +8,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -102,5 +101,18 @@ public class TestItemService {
         testItem = get(testItem.getId()).get();
         testItem.setName(name);
         return repository.save(testItem);
+    }
+
+    @Transactional
+    public void reorderItems(TestItem first, TestItem second) {
+        first = refresh(first);
+        second = refresh(second);
+
+        Integer firstOrderIndex = first.getOrderIndex();
+        first.setOrderIndex(second.getOrderIndex());
+        second.setOrderIndex(firstOrderIndex);
+
+        repository.save(first);
+        repository.save(second);
     }
 }

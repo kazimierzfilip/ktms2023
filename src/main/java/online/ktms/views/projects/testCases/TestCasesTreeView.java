@@ -79,6 +79,7 @@ public class TestCasesTreeView extends Div {
     private void expandPath(TestItem testItem) {
         TestItem i = testItem.getParentItem();
         while (i != null) {
+            System.out.println("expand: " + i.getCode());
             testItemTreeGrid.expand(i);
             i = i.getParentItem();
         }
@@ -110,6 +111,16 @@ public class TestCasesTreeView extends Div {
                         (testItem.getChildren().size() > 0 ? " (" + testItem.getChildTestCasesCount() + ")" : ""),
                 testItem -> testItem.getType().equals(TestItemType.TEST_SUITE) ? "vaadin:folder-open-o" : null);
 
+        setupRowsDragging();
+
+        createTreeGridContextMenu();
+
+        collapseAlsoInnerItems();
+
+        openDetailsOnClick();
+    }
+
+    private void setupRowsDragging() {
         testItemTreeGrid.setDropMode(GridDropMode.ON_TOP_OR_BETWEEN);
         testItemTreeGrid.setRowsDraggable(true);
 
@@ -119,51 +130,27 @@ public class TestCasesTreeView extends Div {
             TestItem targetItem = e.getDropTargetItem().orElse(null);
             if (draggingItem != null && targetItem != null && draggingItem != targetItem) {
                 GridDropLocation dropLocation = e.getDropLocation();
-                System.out.println(draggingItem.getCodeAndName() + " " + dropLocation + " " + targetItem.getCodeAndName());
 
                 if (changingPlacesInTheSameSuite(dropLocation, draggingItem, targetItem)) {
-                    System.out.println("change");
-                    Integer draggingIndex = draggingItem.getOrderIndex();
-                    draggingItem.setOrderIndex(targetItem.getOrderIndex());
-                    targetItem.setOrderIndex(draggingIndex);
-                } else if (droppingToSuite(dropLocation)) {
-                    System.out.println("drop");
-                    draggingItem.getParentItem().getChildren().sort(Comparator.comparingInt(TestItem::getOrderIndex));
-                    for (int i = draggingItem.getParentItem().getChildren().indexOf(draggingItem) + 1, order = draggingItem.getOrderIndex(); i < draggingItem.getParentItem().getChildren().size(); i++, order++) {
-                        draggingItem.getParentItem().getChildren().get(i).setOrderIndex(order);
-                    }
-                    draggingItem.setParentItem(targetItem);
-                    draggingItem.setOrderIndex(targetItem.getChildren().size());
-                } else if (droppingToSuiteAtIndex(dropLocation, draggingItem, targetItem)) {
-                    System.out.println("drop at index");
-                    draggingItem.getParentItem().getChildren().sort(Comparator.comparingInt(TestItem::getOrderIndex));
-                    for (int i = draggingItem.getParentItem().getChildren().indexOf(draggingItem) + 1, order = draggingItem.getOrderIndex(); i < draggingItem.getParentItem().getChildren().size(); i++, order++) {
-                        draggingItem.getParentItem().getChildren().get(i).setOrderIndex(order);
-                    }
-                    draggingItem.setParentItem(targetItem);
-                    Integer orderToSet = dropLocation.equals(GridDropLocation.ABOVE) ?
-                            targetItem.getOrderIndex() - 1 : targetItem.getOrderIndex() + 1;
-                    orderToSet = orderToSet < 0 ? 0 : orderToSet;
-                    draggingItem.setOrderIndex(orderToSet);
-                    targetItem.getParentItem().getChildren().sort(Comparator.comparingInt(TestItem::getOrderIndex));
-                    Integer indexToSet = targetItem.getChildren().indexOf(targetItem) + (dropLocation.equals(GridDropLocation.ABOVE) ? 0 : 1);
-                    for (int i = indexToSet, order = orderToSet + 1; i < targetItem.getParentItem().getChildren().size(); i++, order++) {
-                        targetItem.getParentItem().getChildren().get(i).setOrderIndex(order);
-                    }
+                    testItemService.reorderItems(draggingItem, targetItem);
+                } else if (droppingToSuite(dropLocation, targetItem) && targetItem != draggingItem.getParentItem()) {
+                    System.out.println("drop to suite");
+                    projectService.moveItemToSuite(project, draggingItem, targetItem);
+                } else if (droppingToSuiteAtIndex(dropLocation, draggingItem, targetItem)
+                        && !(draggingItem.getType().equals(TestItemType.TEST_CASE) && targetItem.getParentItem() == null)) {
+                    projectService.moveItemToSuiteAtLocation(project, draggingItem, targetItem.getParentItem(), targetItem, dropLocation);
+                } else {
+                    return;
                 }
-                testItemService.update(draggingItem);
-                testItemService.update(targetItem);
+                System.out.println("reload tree");
                 rootItems = getRootItemsFromDatabase();
                 setTreeItems(rootItems);
+
+                expandPath(testItemService.refresh(draggingItem));
             }
         });
+
         testItemTreeGrid.addDragEndListener(e -> draggingItem = null);
-
-        createTreeGridContextMenu();
-
-        collapseAlsoInnerItems();
-
-        openDetailsOnClick();
     }
 
     private boolean changingPlacesInTheSameSuite(GridDropLocation dropLocation, TestItem draggingItem, TestItem targetItem) {
@@ -171,8 +158,8 @@ public class TestCasesTreeView extends Div {
                 && draggingItem.getParentItem() == targetItem.getParentItem();
     }
 
-    private static boolean droppingToSuite(GridDropLocation dropLocation) {
-        return dropLocation == GridDropLocation.ON_TOP;
+    private static boolean droppingToSuite(GridDropLocation dropLocation, TestItem targetItem) {
+        return dropLocation == GridDropLocation.ON_TOP && targetItem.getType().equals(TestItemType.TEST_SUITE);
     }
 
     private boolean droppingToSuiteAtIndex(GridDropLocation dropLocation, TestItem draggingItem, TestItem targetItem) {
@@ -376,17 +363,7 @@ public class TestCasesTreeView extends Div {
 
                 detailsView.clear();
 
-                project = projectService.getWithValues(project.getId()).get();
-                rootItems = getRootItemsFromDatabase();
-                List<TestItem> expandedItems = new ArrayList<>();
-                for (TestItem testItem : project.getTestItems()) {
-                    if (testItemTreeGrid.isExpanded(testItem)) {
-                        expandedItems.add(testItem);
-                    }
-                }
-                expandedItems.remove(event.getItem().get());
-                setTreeItems(rootItems);
-                testItemTreeGrid.expand(expandedItems);
+                refreshTreeKeepingExpansions((expandedItems) -> expandedItems.remove(event.getItem().get()));
             }
         });
 
@@ -402,6 +379,20 @@ public class TestCasesTreeView extends Div {
                 delete.setEnabled(true);
             }
         });
+    }
+
+    private void refreshTreeKeepingExpansions(Consumer<List<TestItem>> operations) {
+        project = projectService.getWithValues(project.getId()).get();
+        rootItems = getRootItemsFromDatabase();
+        List<TestItem> expandedItems = new ArrayList<>();
+        for (TestItem item : project.getTestItems()) {
+            if (testItemTreeGrid.isExpanded(item)) {
+                expandedItems.add(item);
+            }
+        }
+        operations.accept(expandedItems);
+        setTreeItems(rootItems);
+        testItemTreeGrid.expand(expandedItems);
     }
 
     private TextField createSearchField() {

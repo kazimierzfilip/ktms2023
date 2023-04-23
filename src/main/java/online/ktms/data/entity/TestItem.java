@@ -30,7 +30,7 @@ public class TestItem extends AbstractEntity {
     @ManyToOne//(fetch = FetchType.LAZY)
     private Project project;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne//(fetch = FetchType.LAZY)
     private TestItem parentItem;
 
     private Integer orderIndex = 0;

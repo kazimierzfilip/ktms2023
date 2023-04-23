@@ -1,5 +1,6 @@
 package online.ktms.data.service;
 
+import com.vaadin.flow.component.grid.dnd.GridDropLocation;
 import jakarta.transaction.Transactional;
 import online.ktms.data.Status;
 import online.ktms.data.TestItemType;
@@ -85,6 +86,50 @@ public class ProjectService {
         return testItem;
     }
 
+    @Transactional
+    public void moveItemToSuite(Project project, TestItem item, TestItem suite) {
+        project = refresh(project);
+        item = testItemService.refresh(item);
+        suite = testItemService.refresh(suite);
+
+        System.out.println("rewrite parent");
+        rewriteTestCaseOrdersAfterRemoving(project, item.getParentItem(), item.getOrderIndex());
+        System.out.println("set props");
+        item.setParentItem(suite);
+        item.setOrderIndex(suite.getChildren().size());
+
+        System.out.println("Save");
+        testItemRepository.save(item);
+        testItemRepository.save(suite);
+    }
+
+    @Transactional
+    public void moveItemToSuiteAtLocation(Project project, TestItem item, TestItem suite, TestItem relativeToItem, GridDropLocation dropLocation) {
+        project = refresh(project);
+        item = testItemService.refresh(item);
+        if (suite != null)
+            suite = testItemService.refresh(suite);
+        relativeToItem = testItemService.refresh(relativeToItem);
+
+        rewriteTestCaseOrdersAfterRemoving(project, item.getParentItem(), item.getOrderIndex());
+
+        int orderToSet = dropLocation.equals(GridDropLocation.ABOVE) ?
+                relativeToItem.getOrderIndex() - 1 : relativeToItem.getOrderIndex() + 1;
+        orderToSet = Math.max(orderToSet, 0);
+        moveTestCaseOrdersToEndFrom(project, suite, orderToSet);
+        item.setOrderIndex(orderToSet);
+
+        item.setParentItem(suite);
+
+        testItemRepository.save(item);
+        if (suite != null)
+            testItemRepository.save(suite);
+    }
+
+    private Project refresh(Project project) {
+        return getWithValues(project.getId()).get();
+    }
+
     private void moveTestCaseOrdersToEndFrom(Project project, TestItem parent, Integer orderIndex) {
         List<TestItem> testItems;
         if (parent == null) {
@@ -96,6 +141,22 @@ public class ProjectService {
         }
         testItems.sort(Comparator.comparingInt(TestItem::getOrderIndex));
         for (int i = orderIndex, order = orderIndex + 1; i < testItems.size(); i++, order++) {
+            testItems.get(i).setOrderIndex(order);
+            testItemService.update(testItems.get(i));
+        }
+    }
+
+    private void rewriteTestCaseOrdersAfterRemoving(Project project, TestItem parent, Integer orderIndex) {
+        List<TestItem> testItems;
+        if (parent == null) {
+            testItems = project.getTestItems().stream()
+                    .filter(testItem -> testItem.getType().equals(TestItemType.TEST_SUITE) && testItem.getParentItem() == null)
+                    .collect(Collectors.toList());
+        } else {
+            testItems = parent.getChildren();
+        }
+        testItems.sort(Comparator.comparingInt(TestItem::getOrderIndex));
+        for (int i = orderIndex + 1, order = orderIndex; i < testItems.size(); i++, order++) {
             testItems.get(i).setOrderIndex(order);
             testItemService.update(testItems.get(i));
         }
