@@ -1,0 +1,57 @@
+/* Change cursor for grid text */
+vaadin-grid-cell-content {
+    cursor: pointer;
+}
+
+/* Highlight grid row on mouse hover */
+vaadin-grid::part(cell) {
+    background-color: var(--hover-row-color, var(--lumo-base-color));
+}
+
+/* Display button on row mouse hover */
+/* Highlight grid row on mouse hover */
+vaadin-grid::part(row):hover {
+    --hover-actions-display: block;
+    --hover-row-color: var(--_lumo-grid-selected-row-color) !important;
+}
+
+vaadin-grid[theme~="compact"] {
+  font-size: var(--lumo-font-size-xs) !important;
+}
+
+/* Standard TreeGrid not used */
+
+/* Make tree grid indents more compact */
+/* Do not expand on name click */
+/*
+vaadin-grid-tree-toggle {
+    --vaadin-grid-tree-toggle-level-offset: 0.5em;
+    pointer-events: none;
+}
+*/
+
+/* Expand on toggle click */
+/*
+vaadin-grid-tree-toggle::part(toggle) {
+    pointer-events: auto;
+}
+*/
+
+/* Custom TreeGrid - ExplorerTreeGrid */
+
+/* Make tree grid indents more compact */
+explorer-tree-grid-toggle {
+    --explorer-tree-grid-toggle-level-offset: 1.3rem;
+    --explorer-tree-grid-expand-icon-width: 0.8rem;
+    --explorer-tree-grid-default-margin: var(--lumo-space-s);
+}
+
+/* Do not expand on name click */
+explorer-tree-grid-toggle {
+    pointer-events: none;
+}
+
+/* Expand on toggle click */
+explorer-tree-grid-toggle::part(toggle) {
+    pointer-events: auto;
+}
