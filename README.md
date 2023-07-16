@@ -2,6 +2,8 @@
 
 Zarys systemu do zarządzania przypadkami testowymi. Java, Vaadin.
 
+![ktms](ktms.png)
+
 ## Running the application
 
 The project is a standard Maven project. To run it from the command line,
