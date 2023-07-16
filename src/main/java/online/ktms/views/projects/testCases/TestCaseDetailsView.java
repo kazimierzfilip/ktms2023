@@ -3,10 +3,15 @@ package online.ktms.views.projects.testCases;
 import com.vaadin.flow.component.*;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.contextmenu.MenuItem;
+import com.vaadin.flow.component.contextmenu.SubMenu;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.menubar.MenuBar;
+import com.vaadin.flow.component.menubar.MenuBarVariant;
+import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
@@ -44,9 +49,7 @@ public class TestCaseDetailsView extends Div {
 
     public void displayDetailsOf(TestItem testItem) {
         header.createHeader(testItem.getType());
-        System.out.println("Header created");
         body.createBody(testItem);
-        System.out.println("body created");
         this.openedItem = testItem;
     }
 
@@ -115,6 +118,7 @@ public class TestCaseDetailsView extends Div {
 
     private static class Body extends Div {
 
+        private final MenuBar copyPathMenu = new MenuBar();
         private final Text path = new Text("");
         private final H3 code = new H3();
         private final TextField name = new TextField();
@@ -123,6 +127,36 @@ public class TestCaseDetailsView extends Div {
         private boolean editMode = false;
 
         public Body() {
+            copyPathMenu.addThemeVariants(MenuBarVariant.LUMO_ICON, MenuBarVariant.LUMO_SMALL);
+            MenuItem copyPathButton = copyPathMenu.addItem("Copy path");
+            MenuItem copyOptions = copyPathMenu.addItem(new Icon(VaadinIcon.CHEVRON_DOWN));
+            SubMenu subMenu = copyOptions.getSubMenu();
+            MenuItem copyPath = createCopyPathOption(subMenu, "Path", true);
+            MenuItem copyName = createCopyPathOption(subMenu, "Name", true);
+            MenuItem copyCode = createCopyPathOption(subMenu, "Code", true);
+            MenuItem copyLink = createCopyPathOption(subMenu, "Link", true);
+            MenuItem copyChildren = createCopyPathOption(subMenu, "With children", true);
+            copyPathButton.addClickListener(e -> {
+                if (e.getSource().getText().equals("Copy path")) {
+                    String path = copyPath.isChecked() ? testItem.getPath() + ": " : "";
+                    String name = copyName.isChecked() ? testItem.getName() + " " : "";
+                    String code = copyCode.isChecked() ? testItem.getCode() + " " : "";
+
+                    if (copyLink.isChecked()) {
+                        getUI().get().getPage().fetchCurrentURL(url -> {
+                            String urlString = url.toString();
+                            String partUrl = urlString.substring(0, urlString.indexOf("/testCases") + "/testCases".length());
+                            copyToClipboard(path + "[" + name + code + "|" + partUrl + "]");
+                        });
+                    } else {
+                        copyToClipboard(path + name + code);
+                    }
+                    if (copyChildren.isChecked()) {
+
+                    }
+                }
+            });
+
             name.addClassName("test-item-name-in-details");
             name.setWidthFull();
             name.setReadOnly(true);
@@ -130,9 +164,60 @@ public class TestCaseDetailsView extends Div {
             setHeightFull();
         }
 
+        private void copyToClipboard(String toCopy) {
+            getUI().get().getPage().executeJs("var text = '" + toCopy + "'\n" +
+                    "var textArea = document.createElement(\"textarea\");\n" +
+                    "\n" +
+                    "  // Place in the top-left corner of screen regardless of scroll position.\n" +
+                    "  textArea.style.position = 'fixed';\n" +
+                    "  textArea.style.top = 0;\n" +
+                    "  textArea.style.left = 0;\n" +
+                    "\n" +
+                    "  // Ensure it has a small width and height. Setting to 1px / 1em\n" +
+                    "  // doesn't work as this gives a negative w/h on some browsers.\n" +
+                    "  textArea.style.width = '2em';\n" +
+                    "  textArea.style.height = '2em';\n" +
+                    "\n" +
+                    "  // We don't need padding, reducing the size if it does flash render.\n" +
+                    "  textArea.style.padding = 0;\n" +
+                    "\n" +
+                    "  // Clean up any borders.\n" +
+                    "  textArea.style.border = 'none';\n" +
+                    "  textArea.style.outline = 'none';\n" +
+                    "  textArea.style.boxShadow = 'none';\n" +
+                    "\n" +
+                    "  // Avoid flash of the white box if rendered for any reason.\n" +
+                    "  textArea.style.background = 'transparent';\n" +
+                    "\n" +
+                    "\n" +
+                    "  textArea.value = text;\n" +
+                    "\n" +
+                    "  document.body.appendChild(textArea);\n" +
+                    "  textArea.focus();\n" +
+                    "  textArea.select();\n" +
+                    "\n" +
+                    "  try {\n" +
+                    "    document.execCommand('copy');\n" +
+                    "  } catch (err) {\n" +
+                    "    console.log('Unable to copy');\n" +
+                    "  }\n" +
+                    "\n" +
+                    "  document.body.removeChild(textArea);\n");
+            Notification.show("Copied to clipboard", 2000, Notification.Position.MIDDLE);
+        }
+
+        private MenuItem createCopyPathOption(SubMenu subItems, String text, boolean defaultOption) {
+            MenuItem item = subItems.addItem(text);
+            item.setCheckable(true);
+            item.setChecked(defaultOption);
+            return item;
+        }
+
         public void createBody(TestItem testItem) {
             this.testItem = Service.get(TestItemService.class).loadFieldValues(testItem);
             removeAll();
+
+            add(copyPathMenu);
 
             path.setText(this.testItem.getPath());
             add(path);
