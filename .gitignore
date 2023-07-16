@@ -22,5 +22,4 @@ webpack.generated.js
 
 package-lock.json
 
-src/main/dev-bundle/
-
+/src/main/dev-bundle/
